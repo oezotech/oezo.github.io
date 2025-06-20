@@ -2,14 +2,132 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OEZO VR Demo</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* --- 样式 表示 --- */
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    #webgl {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      opacity: 0; transition: opacity 1s ease;
+    }
+    #logo {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      height: 60vh; width: auto;
+      opacity: 0; filter: invert(100%);
+      transition: opacity 1s ease;
+    }
+  </style>
 </head>
 <body>
+  <!-- LOGO -->
   <img id="logo" src="assets/oezo_logo.svg" alt="OEZO Logo" />
+  <!-- Three.js 渲染 canvas -->
   <canvas id="webgl"></canvas>
-  <script type="module" src="main.js"></script>
+
+  <!-- 一体化 JS 脚本 -->
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.155.0/examples/jsm/loaders/GLTFLoader.js';
+
+    // 获取元素
+    const logo = document.getElementById('logo');
+    const canvas = document.getElementById('webgl');
+
+    // 场景和相机
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+    scene.add(camera);
+
+    // 灯光
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dir = new THREE.DirectionalLight(0xffffff, 1);
+    dir.position.set(0,0,5);
+    camera.add(dir);
+    scene.add(camera);
+
+    // 渲染器
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    window.addEventListener('resize', ()=>{
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w,h);
+      camera.aspect = w/h;
+      camera.updateProjectionMatrix();
+    });
+
+    let initialDistance = 0;
+    let startTime = null;
+
+    // 加载模型
+    new GLTFLoader().load('assets/vr_headset.glb',
+      gltf => {
+        const model = gltf.scene;
+        scene.add(model);
+
+        // 居中 & 计算相机距离
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+        const size = box.getSize(new THREE.Vector3());
+        const modelHeight = size.y;
+        const fov = camera.fov * Math.PI/180;
+        initialDistance = (modelHeight/2)/Math.tan(fov/2)/0.6;
+        camera.position.set(0,0,initialDistance);
+        camera.lookAt(0,0,0);
+
+        console.log('模型加载完成，距离=', initialDistance);
+        startTimeline();
+      },
+      undefined,
+      err => console.error('GLTF加载出错:', err)
+    );
+
+    // 渲染循环
+    function animate(ts) {
+      if (!startTime) startTime = ts;
+      const t = ts - startTime;
+
+      // 3~4s 旋转
+      if (t>=3000 && t<4000) {
+        const p = (t-3000)/1000;
+        scene.traverse(o=> o.isMesh && (o.rotation.y = p * Math.PI));
+      }
+      // 4~7s 推进
+      else if (t>=4000 && t<7000) {
+        const p = (t-4000)/3000;
+        const end = initialDistance * 0.1;
+        camera.position.z = initialDistance - (initialDistance - end) * p;
+        camera.lookAt(0,0,0);
+      }
+      // >7s 定位
+      else if (t>=7000) {
+        camera.position.z = initialDistance * 0.1;
+        camera.lookAt(0,0,0);
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    // 时间线：Logo & Canvas 淡入淡出 + 启动渲染
+    function startTimeline() {
+      console.log('开始时间线动画');
+      setTimeout(()=> logo.style.opacity = '1', 100);
+      setTimeout(()=> canvas.style.opacity = '1', 1000);
+      setTimeout(()=> logo.style.opacity = '0', 2000);
+      setTimeout(()=> requestAnimationFrame(animate), 3000);
+    }
+  </script>
 </body>
 </html>
