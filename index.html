@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OEZO 高级3D展示</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>OEZO 3D展示</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.min.js"></script>
@@ -12,6 +12,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            touch-action: none;
         }
 
         body {
@@ -50,7 +51,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            transition: transform 0.3s ease;
         }
 
         #canvas-container {
@@ -87,12 +87,19 @@
 
         @media (max-width: 768px) {
             #logo-container {
-                width: 90vmin;
-                height: 90vmin;
+                width: 80vmin;
+                height: 80vmin;
             }
             
             .info-text {
                 font-size: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #logo-container {
+                width: 80vmin;
+                height: 80vmin;
             }
         }
     </style>
@@ -141,6 +148,8 @@
         let fadeOutStarted = false;
         let fadeOutProgress = 0;
         let animationFrameId = null;
+        let originalModelSize = 0;
+        let baseScale = 0;
         
         // 初始化场景
         function init() {
@@ -162,14 +171,15 @@
                 antialias: true, 
                 alpha: true,
                 powerPreference: "high-performance",
-                preserveDrawingBuffer: true // 防止上下文丢失
+                preserveDrawingBuffer: true,
+                logarithmicDepthBuffer: true // 改善深度渲染
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.outputEncoding = THREE.sRGBEncoding;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
-            renderer.domElement.style.backgroundColor = 'transparent'; // 确保透明背景
+            renderer.domElement.style.backgroundColor = 'transparent';
             document.getElementById('canvas-container').appendChild(renderer.domElement);
             
             // 加载HDR环境贴图
@@ -207,6 +217,21 @@
             );
         }
         
+        // 计算模型缩放比例
+        function calculateModelScale() {
+            // 计算视口最小尺寸（用于vmin计算）
+            const viewportMin = Math.min(window.innerWidth, window.innerHeight);
+            
+            // 计算Logo尺寸（像素）
+            const logoSize = viewportMin * 0.8;
+            
+            // 计算模型应有的尺寸（Logo的60%）
+            const targetModelSize = logoSize * 0.6;
+            
+            // 计算缩放比例
+            return targetModelSize / (originalModelSize * 100);
+        }
+        
         // 加载3D模型
         function loadModel() {
             const loader = new THREE.GLTFLoader();
@@ -217,17 +242,22 @@
                     
                     // 计算模型边界以居中显示
                     const box = new THREE.Box3().setFromObject(model);
-                    const size = box.getSize(new THREE.Vector3()).length();
+                    const size = box.getSize(new THREE.Vector3());
                     const center = box.getCenter(new THREE.Vector3());
                     
-                    model.position.x = -center.x;
-                    model.position.y = -center.y;
-                    model.position.z = -center.z;
+                    // 保存原始模型尺寸（最大边）
+                    originalModelSize = Math.max(size.x, size.y, size.z);
                     
-                    // 自适应缩放并放大2倍
-                    const maxDim = Math.max(size, 1);
-                    const scale = 3.0 / maxDim;
-                    model.scale.multiplyScalar(scale * 2); // 2倍大小
+                    // 计算初始缩放比例
+                    baseScale = calculateModelScale();
+                    
+                    // 应用缩放
+                    model.scale.set(baseScale, baseScale, baseScale);
+                    
+                    // 重新计算位置（考虑缩放）
+                    model.position.x = -center.x * baseScale;
+                    model.position.y = -center.y * baseScale;
+                    model.position.z = -center.z * baseScale;
                     
                     // 确保所有材质支持透明
                     model.traverse((child) => {
@@ -364,6 +394,25 @@
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                // 重新计算模型比例
+                if (model) {
+                    const newScale = calculateModelScale();
+                    const currentScale = model.scale.x;
+                    
+                    // 计算缩放比例变化
+                    const scaleChange = newScale / currentScale;
+                    
+                    // 应用新比例
+                    model.scale.multiplyScalar(scaleChange);
+                    
+                    // 重新居中
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    model.position.x = -center.x;
+                    model.position.y = -center.y;
+                    model.position.z = -center.z;
+                }
             }
         }
         
