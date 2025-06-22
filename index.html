@@ -22,6 +22,8 @@
             justify-content: center;
             align-items: center;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            perspective: 1000px;
+            transition: background-color 0.5s ease;
         }
 
         #container {
@@ -31,6 +33,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
         }
 
         #logo-container {
@@ -47,6 +50,7 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
+            transition: transform 0.3s ease;
         }
 
         #canvas-container {
@@ -55,6 +59,7 @@
             height: 100%;
             opacity: 1;
             transition: opacity 1.5s ease;
+            background-color: transparent;
         }
 
         .info-text {
@@ -78,19 +83,6 @@
             writing-mode: vertical-rl;
             text-orientation: mixed;
             transform: rotate(180deg);
-        }
-
-        #performance {
-            position: absolute;
-            bottom: 15px;
-            left: 15px;
-            color: #00ff00;
-            font-family: monospace;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px;
-            border-radius: 3px;
-            font-size: 12px;
         }
 
         @media (max-width: 768px) {
@@ -139,7 +131,6 @@
         
         <div id="top-left" class="info-text">OEZO VR EXPERIENCE</div>
         <div id="bottom-right" class="info-text">IMMERSIVE TECHNOLOGY</div>
-        <div id="performance">FPS: 60 | CPU: 0%</div>
     </div>
 
     <script>
@@ -150,24 +141,9 @@
         let fadeOutStarted = false;
         let fadeOutProgress = 0;
         let animationFrameId = null;
-        let lastRenderTime = 0;
-        let frameCount = 0;
-        let fps = 0;
-        let cpuUsage = 0;
-        
-        // 性能监控
-        function startPerformanceMonitor() {
-            setInterval(() => {
-                document.getElementById('performance').textContent = `FPS: ${fps} | CPU: ${cpuUsage}%`;
-                cpuUsage = 0;
-            }, 1000);
-        }
         
         // 初始化场景
         function init() {
-            // 启动性能监控
-            startPerformanceMonitor();
-            
             // 创建场景
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000); // 纯黑色背景
@@ -185,13 +161,15 @@
             renderer = new THREE.WebGLRenderer({ 
                 antialias: true, 
                 alpha: true,
-                powerPreference: "high-performance"
+                powerPreference: "high-performance",
+                preserveDrawingBuffer: true // 防止上下文丢失
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.outputEncoding = THREE.sRGBEncoding;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
+            renderer.domElement.style.backgroundColor = 'transparent'; // 确保透明背景
             document.getElementById('canvas-container').appendChild(renderer.domElement);
             
             // 加载HDR环境贴图
@@ -251,6 +229,13 @@
                     const scale = 3.0 / maxDim;
                     model.scale.multiplyScalar(scale * 2); // 2倍大小
                     
+                    // 确保所有材质支持透明
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.transparent = true;
+                        }
+                    });
+                    
                     scene.add(model);
                     
                     // 播放模型自带动画（只播放一次）
@@ -269,7 +254,7 @@
                         mixer.addEventListener('finished', () => {
                             // 动画完成后完全淡出
                             setTimeout(() => {
-                                document.getElementById('canvas-container').style.opacity = '0';
+                                // 先隐藏文本
                                 document.getElementById('top-left').style.opacity = '0';
                                 document.getElementById('bottom-right').style.opacity = '0';
                                 
@@ -279,8 +264,13 @@
                                     animationFrameId = null;
                                 }
                                 
-                                // 释放资源
-                                disposeScene();
+                                // 淡出整个canvas容器
+                                document.getElementById('canvas-container').style.opacity = '0';
+                                
+                                // 释放资源（稍后执行）
+                                setTimeout(() => {
+                                    disposeScene();
+                                }, 500);
                             }, 1000);
                         });
                     } else {
@@ -294,7 +284,14 @@
                                     cancelAnimationFrame(animationFrameId);
                                     animationFrameId = null;
                                 }
-                                disposeScene();
+                                
+                                // 淡出整个canvas容器
+                                document.getElementById('canvas-container').style.opacity = '0';
+                                
+                                // 释放资源
+                                setTimeout(() => {
+                                    disposeScene();
+                                }, 500);
                             }, 1500);
                         }, 5000);
                     }
@@ -339,16 +336,26 @@
             }
             
             // 释放渲染器资源
-            renderer.dispose();
-            renderer.forceContextLoss();
+            if (renderer) {
+                // 先清除DOM元素
+                const canvasContainer = document.getElementById('canvas-container');
+                while (canvasContainer.firstChild) {
+                    canvasContainer.removeChild(canvasContainer.firstChild);
+                }
+                
+                // 然后释放WebGL资源
+                renderer.dispose();
+                renderer.forceContextLoss();
+                renderer = null;
+            }
             
             // 清除Three.js对象
             scene = null;
             camera = null;
-            renderer = null;
             mixer = null;
             
-            console.log("资源已释放，渲染已停止");
+            // 确保背景保持黑色
+            document.body.style.backgroundColor = '#000';
         }
         
         // 窗口大小调整处理
@@ -362,8 +369,6 @@
         
         // 动画循环
         function animate() {
-            const startTime = performance.now();
-            
             animationFrameId = requestAnimationFrame(animate);
             
             const delta = clock.getDelta();
@@ -384,31 +389,19 @@
                 fadeOutProgress += delta * 0.8;
                 
                 // 更新模型透明度
-                model.traverse((child) => {
-                    if (child.isMesh && child.material) {
-                        child.material.transparent = true;
-                        child.material.opacity = 1 - fadeOutProgress;
-                    }
-                });
+                if (model) {
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.opacity = 1 - fadeOutProgress;
+                        }
+                    });
+                }
             }
             
             // 渲染场景
-            if (renderer) {
+            if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
-            
-            // 计算FPS
-            frameCount++;
-            const now = performance.now();
-            if (now >= lastRenderTime + 1000) {
-                fps = Math.round((frameCount * 1000) / (now - lastRenderTime));
-                lastRenderTime = now;
-                frameCount = 0;
-            }
-            
-            // 计算CPU使用率
-            const renderTime = performance.now() - startTime;
-            cpuUsage = Math.min(100, Math.round((renderTime / 16.67) * 100));
         }
         
         // 页面加载完成后初始化
