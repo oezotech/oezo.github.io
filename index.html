@@ -1,497 +1,82 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>OEZO 3D展示</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Headset Experience</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            touch-action: none;
         }
-
+        
         body {
-            background-color: #000;
             overflow: hidden;
             height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            perspective: 1000px;
-            transition: background-color 0.5s ease;
-        }
-
-        #container {
+            width: 100vw;
             position: relative;
+            background-color: black;
+        }
+        
+        #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
+            z-index: 1;
         }
-
+        
+        #video-bg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
         #logo-container {
-            position: absolute;
-            width: 80vmin;
-            height: 80vmin;
-            z-index: 20;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60vmin;
+            height: 60vmin;
+            z-index: 2;
             opacity: 1;
-            transition: opacity 1.2s cubic-bezier(0.19, 1, 0.22, 1);
-            pointer-events: none;
+            transition: opacity 0.5s ease-out;
         }
-
+        
         #oezo-logo {
             width: 100%;
             height: 100%;
-            object-fit: contain;
-        }
-
-        #canvas-container {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            opacity: 1;
-            transition: opacity 1.5s ease;
-            background-color: transparent;
-        }
-
-        .info-text {
-            position: absolute;
-            color: rgba(255, 255, 255, 0.15);
-            font-size: 10px;
-            letter-spacing: 1px;
-            z-index: 25;
-            opacity: 0;
-            transition: opacity 0.8s ease;
-        }
-
-        #top-left {
-            top: 15px;
-            left: 15px;
-        }
-
-        #bottom-right {
-            bottom: 15px;
-            right: 15px;
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            transform: rotate(180deg);
-        }
-
-        @media (max-width: 768px) {
-            #logo-container {
-                width: 80vmin;
-                height: 80vmin;
-            }
-            
-            .info-text {
-                font-size: 8px;
-            }
-            
-            /* 移动端模型比例调整 */
-            #canvas-container {
-                transform: scale(0.85);
-            }
-        }
-
-        @media (max-width: 480px) {
-            #logo-container {
-                width: 80vmin;
-                height: 80vmin;
-            }
-            
-            /* 小屏幕设备模型比例调整 */
-            #canvas-container {
-                transform: scale(0.75);
-            }
-            
-            #top-left {
-                top: 10px;
-                left: 10px;
-            }
-            
-            #bottom-right {
-                bottom: 10px;
-                right: 10px;
-            }
         }
         
-        /* 设备方向检测 */
+        .fade-out {
+            opacity: 0 !important;
+        }
+        
+        /* 确保视频在移动设备上正确全屏 */
         @media (orientation: portrait) {
-            #logo-container {
-                width: 75vmin;
-                height: 75vmin;
+            #video-bg {
+                width: 100%;
+                height: auto;
+                min-height: 100%;
             }
         }
         
-        /* 设备像素比调整 */
-        @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) { 
-            #logo-container {
-                width: 78vmin;
-                height: 78vmin;
+        @media (orientation: landscape) {
+            #video-bg {
+                width: auto;
+                height: 100%;
+                min-width: 100%;
             }
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="logo-container">
-            <svg id="oezo-logo" viewBox="0 0 612 242.4">
-                <path d="M601.3,91.3c-4.7-4.5-11.8-7-18.2-6.4c-2,0.3-4.4-1.3-4.9-3.3c-7.4-22.2-23.3-44.2-44.2-59.1c-21-14.9-47-22.8-70.3-22.5
-                    H148.5c-23.3-0.3-49.4,7.6-70.3,22.5c-21,14.9-36.9,37-44.2,59.1c-0.5,1.9-2.9,3.5-4.9,3.3c-6.4-0.6-13.6,2-18.2,6.4
-                    c-4.8,4.3-7.8,11.3-7.7,17.7v24.2c-0.1,6.5,2.9,13.4,7.7,17.7c4.7,4.5,11.8,7,18.2,6.4c2-0.3,4.4,1.3,4.9,3.3
-                    c5.8,17.1,16.2,33.8,29.9,47.2c13.7,13.3,30.6,23.3,47.9,28.8c17.2,5.6,36.8,7.2,55.7,4.2c18.9-3,37-10.6,51.7-21.2
-                    c12-8.7,27.5-13.7,42.4-13.6h89c14.9-0.1,30.4,4.9,42.4,13.6c14.7,10.6,32.8,18.2,51.7,21.2c18.9,3,38.5,1.4,55.7-4.2
-                    c17.3-5.4,34.2-15.4,47.9-28.8c13.7-13.3,24.1-30.1,29.9-47.2c0.5-1.9,2.9,3.5,4.9,3.3l1.7,0.1c5.7,0.2,12.5-2.4,17.1-7.1
-                    c4.7-4.7,7.2-11.5,7.1-17.1v-24.2C609.1,102.6,606.1,95.7,601.3,91.3z M65.3,167.2c-1.5-0.2-2.9-1.3-3.6-2.6
-                    c-8.6-16.7-12.3-38.4-9-58.9s13.7-39.9,27.1-53c13.1-13.5,32.5-23.8,53-27.1c20.5-3.3,42.2,0.4,58.9,9c1.3,0.6,2.4,2.1,2.6,3.6
-                    c0.3,1.5-0.3,3.2-1.4,4.2l-20.3,20.3c-1.2,1.3-3.4,1.8-5,1.2c-10-3.5-22-4.2-33.2-1.6c-11.2,2.6-21.6,8.6-29,16.1
-                    c-7.6,7.4-13.5,17.8-16.1,29c-2.6,11.2-1.9,23.1,1.6,33.2c0.6,1.6,0.1,3.8-1.2,5l-20.3,20.3C68.5,166.9,66.8,167.5,65.3,167.2z
-                    M559.6,134c-3.3,24.5-16.7,47.5-33.4,61.1c-16.1,14.2-41.1,23.7-65.7,23c-24.7-0.8-49-11.8-64.2-27c-0.9-0.8-2.1-1.4-3.4-1.4H251.9
-                    c-1.8,0.1-3.9-1.3-4.5-3c-0.8-1.7-0.3-4.1,1.1-5.3l67.8-67.8l18.7-45.1c0.6-1.4,0.4-3.3-0.4-4.5c-0.8-1.3-2.5-2.2-4-2.2H244
-                    c-1.2,0-2.6,0.5-3.4,1.4l-6,6c-1.5,1.3-1.9,4.1-0.8,5.7c9.5,17,13.8,39.6,10.5,61c-3.3,21.4-14.3,41.6-28.5,54.9
-                    c-13.8,13.7-34.4,23.9-55.9,26.5c-21.5,2.5-43.9-2.7-60.6-12.8c-5.6-3.3-10.8-7.1-15.6-11.4c-1-0.8-1.6-2.2-1.6-3.5
-                    c-0.1-1.3,0.5-2.7,1.4-3.6L230.5,39.1c0.9-0.9,2.2-1.4,3.4-1.4h146.6c1.8-0.1,3.9,1.3,4.5,3c0.8,1.7,0.3,4.1-1.1,5.3l-67.8,67.8
-                    l-18.7,45.1c-0.6,1.4-0.4,3.3,0.4,4.5c0.8,1.3,2.5,2.2,4,2.2h67.6c1.5,0,3.2-0.9,4-2.2c0.9-1.3,1.1-3.2,0.4-4.6
-                    c-8.7-19.6-10.3-46.3-2.2-69.6c8.1-23.3,26-43.2,45-53.1c18.6-10.7,45-14.9,69-9.2c24,5.7,45.6,21.4,57.4,39.4
-                    C556,83.8,562.9,109.6,559.6,134z" fill="#ffffff"/>
-                <path d="M524.1,121.2c0.4-14.1-6-31.1-17.7-42.8c-11.7-11.7-28.7-18.1-42.8-17.7c-14.1-0.4-31.1,6-42.8,17.7
-                    c-11.7,11.7-18.1,28.7-17.7,42.8c-0.4,14.1,6,31.1,17.7,42.8c11.7,11.7,28.7,18.1,42.8,17.7c14.1,0.4,31.1-6,42.8-17.7
-                    C518.1,152.3,524.5,135.3,524.1,121.2z" fill="#ffffff"/>
-                <path d="M207.4,107c5.2,19.2-1.6,43.4-16.1,57c-13.7,14.5-37.8,21.3-57,16.1c-1.6-0.3-3.1-1.8-3.5-3.4c-0.5-1.6,0-3.6,1.2-4.7
-                    l67.3-67.3c1.1-1.2,3.2-1.7,4.7-1.2C205.6,103.9,207,105.4,207.4,107z" fill="#ffffff"/>
-            </svg>
-        </div>
-        
-        <div id="canvas-container"></div>
-        
-        <div id="top-left" class="info-text">OEZO VR EXPERIENCE</div>
-        <div id="bottom-right" class="info-text">IMMERSIVE TECHNOLOGY</div>
-    </div>
-
-    <script>
-        // 全局变量
-        let scene, camera, renderer, model, mixer;
-        let clock = new THREE.Clock();
-        let animationDuration = 0;
-        let fadeOutStarted = false;
-        let fadeOutProgress = 0;
-        let animationFrameId = null;
-        let originalModelSize = 0;
-        let baseScale = 0;
-        let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
-        // 初始化场景
-        function init() {
-            // 创建场景
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000000); // 纯黑色背景
-            
-            // 创建相机
-            camera = new THREE.PerspectiveCamera(
-                45,
-                window.innerWidth / window.innerHeight,
-                0.1,
-                1000
-            );
-            camera.position.z = 5;
-            
-            // 创建渲染器
-            renderer = new THREE.WebGLRenderer({ 
-                antialias: true, 
-                alpha: true,
-                powerPreference: "high-performance",
-                preserveDrawingBuffer: true,
-                logarithmicDepthBuffer: true // 改善深度渲染
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
-            renderer.domElement.style.backgroundColor = 'transparent';
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
-            
-            // 加载HDR环境贴图
-            loadEnvironmentMap();
-            
-            // 添加窗口大小调整监听
-            window.addEventListener('resize', onWindowResize);
-        }
-        
-        // 加载环境贴图
-        function loadEnvironmentMap() {
-            const hdrLoader = new THREE.RGBELoader();
-            hdrLoader.load(
-                'assets/Video_Copilot-Back Light_0051_4k.hdr',
-                (texture) => {
-                    texture.mapping = THREE.EquirectangularReflectionMapping;
-                    scene.environment = texture;
-                    
-                    // 加载3D模型
-                    loadModel();
-                },
-                undefined,
-                (error) => {
-                    console.error('HDR环境贴图加载失败:', error);
-                    // 使用默认环境光
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-                    scene.add(ambientLight);
-                    
-                    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-                    directionalLight.position.set(1, 1, 1);
-                    scene.add(directionalLight);
-                    
-                    loadModel();
-                }
-            );
-        }
-        
-        // 计算模型缩放比例
-        function calculateModelScale() {
-            // 计算视口最小尺寸（用于vmin计算）
-            const viewportMin = Math.min(window.innerWidth, window.innerHeight);
-            
-            // 计算Logo尺寸（像素）
-            const logoSize = viewportMin * (isMobile ? 0.75 : 0.8);
-            
-            // 计算模型应有的尺寸（Logo的50%）
-            const targetModelSize = logoSize * (isMobile ? 0.45 : 0.5);
-            
-            // 计算缩放比例
-            return targetModelSize / (originalModelSize * 100);
-        }
-        
-        // 加载3D模型
-        function loadModel() {
-            const loader = new THREE.GLTFLoader();
-            loader.load(
-                'assets/vr_headset.glb',
-                (gltf) => {
-                    model = gltf.scene;
-                    
-                    // 计算模型边界以居中显示
-                    const box = new THREE.Box3().setFromObject(model);
-                    const size = box.getSize(new THREE.Vector3());
-                    const center = box.getCenter(new THREE.Vector3());
-                    
-                    // 保存原始模型尺寸（最大边）
-                    originalModelSize = Math.max(size.x, size.y, size.z);
-                    
-                    // 计算初始缩放比例
-                    baseScale = calculateModelScale();
-                    
-                    // 应用缩放
-                    model.scale.set(baseScale, baseScale, baseScale);
-                    
-                    // 重新计算位置（考虑缩放）
-                    model.position.x = -center.x * baseScale;
-                    model.position.y = -center.y * baseScale;
-                    model.position.z = -center.z * baseScale;
-                    
-                    // 确保所有材质支持透明
-                    model.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            child.material.transparent = true;
-                        }
-                    });
-                    
-                    scene.add(model);
-                    
-                    // 播放模型自带动画（只播放一次）
-                    if (gltf.animations && gltf.animations.length > 0) {
-                        mixer = new THREE.AnimationMixer(model);
-                        const action = mixer.clipAction(gltf.animations[0]);
-                        action.clampWhenFinished = true;
-                        action.setLoop(THREE.LoopOnce);
-                        
-                        // 获取动画持续时间
-                        animationDuration = gltf.animations[0].duration;
-                        
-                        action.play();
-                        
-                        // 监听动画完成事件
-                        mixer.addEventListener('finished', () => {
-                            // 动画完成后完全淡出
-                            setTimeout(() => {
-                                // 先隐藏文本
-                                document.getElementById('top-left').style.opacity = '0';
-                                document.getElementById('bottom-right').style.opacity = '0';
-                                
-                                // 停止渲染循环
-                                if (animationFrameId) {
-                                    cancelAnimationFrame(animationFrameId);
-                                    animationFrameId = null;
-                                }
-                                
-                                // 淡出整个canvas容器
-                                document.getElementById('canvas-container').style.opacity = '0';
-                                
-                                // 释放资源（稍后执行）
-                                setTimeout(() => {
-                                    disposeScene();
-                                }, 500);
-                            }, 1000);
-                        });
-                    } else {
-                        // 如果没有动画，在5秒后淡出
-                        setTimeout(() => {
-                            fadeOutStarted = true;
-                            
-                            // 在淡出完成后停止渲染
-                            setTimeout(() => {
-                                if (animationFrameId) {
-                                    cancelAnimationFrame(animationFrameId);
-                                    animationFrameId = null;
-                                }
-                                
-                                // 淡出整个canvas容器
-                                document.getElementById('canvas-container').style.opacity = '0';
-                                
-                                // 释放资源
-                                setTimeout(() => {
-                                    disposeScene();
-                                }, 500);
-                            }, 1500);
-                        }, 5000);
-                    }
-                    
-                    // 显示信息层
-                    setTimeout(() => {
-                        document.getElementById('top-left').style.opacity = '0.15';
-                        document.getElementById('bottom-right').style.opacity = '0.15';
-                    }, 1000);
-                    
-                    // 2秒后淡出Logo
-                    setTimeout(() => {
-                        document.getElementById('logo-container').style.opacity = '0';
-                    }, 2000);
-                    
-                    // 开始动画循环
-                    animate();
-                },
-                undefined,
-                (error) => {
-                    console.error('模型加载失败:', error);
-                }
-            );
-        }
-        
-        // 释放场景资源
-        function disposeScene() {
-            // 释放模型资源
-            if (model) {
-                scene.remove(model);
-                model.traverse(child => {
-                    if (child.isMesh) {
-                        if (child.material) {
-                            child.material.dispose();
-                        }
-                        if (child.geometry) {
-                            child.geometry.dispose();
-                        }
-                    }
-                });
-                model = null;
-            }
-            
-            // 释放渲染器资源
-            if (renderer) {
-                // 先清除DOM元素
-                const canvasContainer = document.getElementById('canvas-container');
-                while (canvasContainer.firstChild) {
-                    canvasContainer.removeChild(canvasContainer.firstChild);
-                }
-                
-                // 然后释放WebGL资源
-                renderer.dispose();
-                renderer.forceContextLoss();
-                renderer = null;
-            }
-            
-            // 清除Three.js对象
-            scene = null;
-            camera = null;
-            mixer = null;
-            
-            // 确保背景保持黑色
-            document.body.style.backgroundColor = '#000';
-        }
-        
-        // 窗口大小调整处理
-        function onWindowResize() {
-            if (camera && renderer) {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                
-                // 重新计算模型比例
-                if (model) {
-                    const newScale = calculateModelScale();
-                    const currentScale = model.scale.x;
-                    
-                    // 计算缩放比例变化
-                    const scaleChange = newScale / currentScale;
-                    
-                    // 应用新比例
-                    model.scale.multiplyScalar(scaleChange);
-                    
-                    // 重新居中
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    model.position.x = -center.x;
-                    model.position.y = -center.y;
-                    model.position.z = -center.z;
-                }
-            }
-        }
-        
-        // 动画循环
-        function animate() {
-            animationFrameId = requestAnimationFrame(animate);
-            
-            const delta = clock.getDelta();
-            const elapsedTime = clock.getElapsedTime();
-            
-            // 更新模型动画
-            if (mixer) {
-                mixer.update(delta);
-                
-                // 在动画结束前1秒开始淡出效果
-                if (!fadeOutStarted && elapsedTime > (animationDuration - 1) && animationDuration > 0) {
-                    fadeOutStarted = true;
-                }
-            }
-            
-            // 应用淡出效果
-            if (fadeOutStarted && fadeOutProgress < 1) {
-                fadeOutProgress += delta * 0.8;
-                
-                // 更新模型透明度
-                if (model) {
-                    model.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            child.material.opacity = 1 - fadeOutProgress;
-                        }
-                    });
-                }
-            }
-            
-            // 渲染场景
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
-            }
-        }
-        
-        // 页面加载完成后初始化
-        window.addEventListener('load', init);
-    </script>
-</body>
-</html>
+    <div id="video-container">
+        <video id="video-bg" autoplay muted>
+            <source src="assets/vr_headset.webm" type="video/webm">
+            Your browser does not support the video tag.
+        </video>
+    </div
