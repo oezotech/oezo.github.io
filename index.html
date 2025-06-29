@@ -56,6 +56,13 @@
         #skip-button:hover {
             background-color: rgba(128, 128, 128, 0.8);
         }
+        
+        /* 添加淡出动画 */
+        .fade-out {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s ease, visibility 0.5s;
+        }
     </style>
 </head>
 <body>
@@ -95,9 +102,15 @@
             // 自动播放视频
             video.play().catch(e => console.log("Autoplay prevented:", e));
             
-            // 视频播放结束后隐藏视频元素
+            // 视频播放结束后隐藏视频和按钮
             video.addEventListener('ended', function() {
                 videoContainer.style.display = 'none';
+                skipButton.classList.add('fade-out');
+                
+                // 可选：完全移除元素
+                setTimeout(() => {
+                    skipButton.remove();
+                }, 500);
             });
             
             // 跳过按钮功能
@@ -105,6 +118,12 @@
                 e.stopPropagation();
                 video.pause();
                 videoContainer.style.display = 'none';
+                skipButton.classList.add('fade-out');
+                
+                // 可选：完全移除元素
+                setTimeout(() => {
+                    skipButton.remove();
+                }, 500);
             });
             
             // 视频容器点击触发全屏
